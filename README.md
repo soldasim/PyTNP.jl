@@ -1,8 +1,5 @@
 # PyTNP
 
-[![Build Status](https://github.com/soldasim/PyTNP.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/soldasim/PyTNP.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Coverage](https://codecov.io/gh/soldasim/PyTNP.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/soldasim/PyTNP.jl)
-
 Julia package that wraps a Transformer Neural Process (TNP) implemented in Python. The Julia API uses PythonCall.jl for training, inference, and basic evaluation workflows.
 
 ## Highlights
