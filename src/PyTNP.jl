@@ -2,8 +2,7 @@ module PyTNP
 
 using PythonCall
 
-export TNPModel, init_model, load_model, predict, train_model!
-
+export TNPModel, init_model, load_model, save_model, predict, train_model!
 include("tnp.jl")
 
 function __init__()

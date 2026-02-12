@@ -36,6 +36,10 @@ class TransformerNeuralProcess(nn.Module):
         self.dim_model = dim_model
         self.embedder_depth = embedder_depth
         self.predictor_depth = predictor_depth
+        self.num_heads = num_heads
+        self.encoder_depth = encoder_depth
+        self.dim_feedforward = dim_feedforward
+        self.dropout = dropout
         
         # Embedder: MLP that maps (x, y) pairs to embeddings
         embedder_layers = [nn.Linear(x_dim + y_dim, dim_model)]

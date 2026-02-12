@@ -83,21 +83,13 @@ end
 
 """
 	load_model(model_path::String = "tnp_model.pt";
-			   x_dim::Int = 1,
-			   y_dim::Int = 1,
-			   dim_model::Int = 128,
-			   embedder_depth::Int = 2,
-			   predictor_depth::Int = 2,
-			   num_heads::Int = 4,
-			   encoder_depth::Int = 2,
-			   dim_feedforward::Int = 512,
-			   dropout::Float64 = 0.1)
+			   device::Union{Nothing, String} = nothing)
 
 Load the trained TNP model from a file.
 
 # Arguments
 - `model_path::String`: Path to the saved model weights
-- Model architecture parameters (must match training configuration)
+- `device`: Optional device override ("mps", "cuda", or "cpu")
 
 # Example
 ```julia
@@ -105,51 +97,39 @@ model = load_model("tnp_model.pt")
 ```
 """
 function load_model(model_path::String = "tnp_model.pt";
-					x_dim::Int = 1,
-					y_dim::Int = 1,
-					dim_model::Int = 128,
-					embedder_depth::Int = 2,
-					predictor_depth::Int = 2,
-					num_heads::Int = 4,
-					encoder_depth::Int = 2,
-					dim_feedforward::Int = 512,
-					dropout::Float64 = 0.1)
-	
+					device::Union{Nothing, String} = nothing)
 	# Import Python modules
 	torch = pyimport("torch")
-	tnp_module = pyimport("tnp")
-	TransformerNeuralProcess = tnp_module.TransformerNeuralProcess
-    
-	# Determine device
-	device = if pyconvert(Bool, torch.backends.mps.is_available())
-		"mps"
-	elseif pyconvert(Bool, torch.cuda.is_available())
-		"cuda"
-	else
-		"cpu"
-	end
-    
-	# Initialize model
-	model = TransformerNeuralProcess(
-		x_dim = x_dim,
-		y_dim = y_dim,
-		dim_model = dim_model,
-		embedder_depth = embedder_depth,
-		predictor_depth = predictor_depth,
-		num_heads = num_heads,
-		encoder_depth = encoder_depth,
-		dim_feedforward = dim_feedforward,
-		dropout = dropout
-	)
-    
-	# Load weights
-	state_dict = torch.load(model_path, map_location=device, weights_only=true)
-	model.load_state_dict(state_dict)
-	model = model.to(device)
-	model.eval()
+	weights = pyimport("weights")
 
+	# Determine device
+	if device === nothing
+		device = if pyconvert(Bool, torch.backends.mps.is_available())
+			"mps"
+		elseif pyconvert(Bool, torch.cuda.is_available())
+			"cuda"
+		else
+			"cpu"
+		end
+	end
+
+	py_model = weights.load_model(model_path, device=device)
 	println("Model loaded successfully on device: $(device)")
-	return TNPModel(model, device)
+	return TNPModel(py_model, device)
+end
+
+"""
+	save_model(model::TNPModel, model_path::String = "tnp_model.pt")
+
+Save model weights and hyperparameters to a file.
+
+# Arguments
+- `model`: TNP model handle to save
+- `model_path::String`: Path to save the model weights
+"""
+function save_model(model::TNPModel, model_path::String = "tnp_model.pt")
+	weights = pyimport("weights")
+	weights.save_model(model.model, model_path)
 end
 
 """

@@ -13,6 +13,7 @@ import torch
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
+from weights import load_model, save_model
 from gp_sampler import make_gp_sampler
 from tnp import initialize_tnp
 from train import train_tnp
@@ -71,14 +72,12 @@ if __name__ == "__main__":
         
         print(f"\nTraining complete! Final loss: {losses[-1]:.4f}")
         
-        # Save model weights
-        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        torch.save(model.state_dict(), MODEL_PATH)
+        # Save model weights + hyperparameters
+        save_model(model, MODEL_PATH)
         print(f"Model weights saved to {MODEL_PATH}")
     else:
-        # Load model weights
-        model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
-        model = model.to(device)
+        # Load model weights + hyperparameters
+        model = load_model(MODEL_PATH, device=device)
         print(f"Model weights loaded from {MODEL_PATH}")
     
     # Test the model

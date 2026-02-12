@@ -1,6 +1,7 @@
 import torch
 from typing import Callable, Optional, Tuple
 
+from weights import load_state_dict, save_model
 from tnp import TransformerNeuralProcess
 
 
@@ -42,8 +43,7 @@ def train_tnp(
         List of losses during training
     """
     if model_path is not None:
-        state_dict = torch.load(model_path, map_location="cpu", weights_only=True)
-        model.load_state_dict(state_dict)
+        load_state_dict(model, model_path, strict=True)
 
     if device is None:
         if torch.backends.mps.is_available():
@@ -94,6 +94,6 @@ def train_tnp(
     model.eval()
 
     if save_path is not None:
-        torch.save(model.state_dict(), save_path)
+        save_model(model, save_path)
     
     return losses
