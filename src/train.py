@@ -19,9 +19,10 @@ def _to_tensor(value: object, device: str) -> torch.Tensor:
 def train_tnp(
     model: TransformerNeuralProcess,
     sample_batch: Callable[[], Tuple[object, object, object, object]],
-    num_iterations: int = 10000,
-    learning_rate: float = 1e-4,
-    print_freq: int = 1000,
+    num_iterations: int = 10_000,
+    lr_start: float = 1e-4,
+    lr_end: float = 0.0,
+    print_freq: int = 500,
     device: Optional[str] = None,
     model_path: Optional[str] = None,
     save_path: Optional[str] = None
@@ -33,7 +34,8 @@ def train_tnp(
         model: TNP model to train
         sample_batch: Callable that returns (context_x, context_y, target_x, target_y)
         num_iterations: Number of training iterations
-        learning_rate: Learning rate for optimizer
+        lr_start: Starting learning rate for cosine annealing
+        lr_end: Ending learning rate for cosine annealing
         print_freq: Print loss every N iterations
         device: Device to use for training
         model_path: Optional path to load initial weights
@@ -54,7 +56,12 @@ def train_tnp(
             device = 'cpu'
     
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr_start)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=num_iterations,
+        eta_min=lr_end
+    )
     
     losses = []
     
@@ -82,6 +89,7 @@ def train_tnp(
         # Backward pass
         loss.backward()
         optimizer.step()
+        scheduler.step()
         
         # Record loss
         loss_value = loss.item()
@@ -89,7 +97,11 @@ def train_tnp(
         
         # Print progress
         if (iteration + 1) % print_freq == 0:
-            print(f"Iteration {iteration + 1}/{num_iterations}, Loss: {loss_value:.4f}")
+            current_lr = optimizer.param_groups[0]["lr"]
+            print(
+                f"Iteration {iteration + 1}/{num_iterations}, "
+                f"Loss: {loss_value:.4f}, LR: {current_lr:.6g}"
+            )
 
     model.eval()
 

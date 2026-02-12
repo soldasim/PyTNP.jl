@@ -20,7 +20,7 @@ mkpath(data_dir)
 
 model_path = joinpath(data_dir, "tnp_model.pt")
 loss_plot_path = joinpath(data_dir, "tnp_training_loss.png")
-pred_plot_path = joinpath(data_dir, "tnp_julia_predictions.png")
+pred_plot_path = joinpath(data_dir, "tnp_predictions.png")
 
 if isfile(model_path)
     println("Loading TNP model from $model_path ...")
@@ -53,7 +53,7 @@ else
         model,
         sample_fn;
         num_iterations = 2000,
-        print_freq = 200,
+        print_freq = 100,
         save_path = model_path,
         device = model.device
     )

@@ -204,7 +204,8 @@ end
 			model_path::Union{Nothing, String} = nothing,
 			save_path::Union{Nothing, String} = "data/tnp_model.pt",
 			num_iterations::Int = 10000,
-			learning_rate::Float64 = 1e-4,
+			lr_start::Float64 = 1e-4,
+			lr_end::Float64 = 1e-6,
 			print_freq::Int = 1000,
 			device::Union{Nothing, String} = nothing)
 
@@ -215,6 +216,8 @@ Train the Transformer Neural Process model using the Python training loop.
 - `sample_fn`: Python callable or Julia function that returns (context_x, context_y, target_x, target_y)
 - `model_path`: Optional path to initial weights to load before training
 - `save_path`: Optional path to save the trained weights
+- `lr_start`: Starting learning rate for cosine annealing
+- `lr_end`: Ending learning rate for cosine annealing
 - Training parameters (see `train.py`)
 
 # Returns
@@ -223,9 +226,10 @@ Train the Transformer Neural Process model using the Python training loop.
 function train_model!(model::TNPModel, sample_fn::Union{Py, Function};
 			model_path::Union{Nothing, String} = nothing,
 			save_path::Union{Nothing, String} = "data/tnp_model.pt",
-			num_iterations::Int = 10000,
-			learning_rate::Float64 = 1e-4,
-			print_freq::Int = 1000,
+			num_iterations::Int = 10_000,
+			lr_start::Float64 = 1e-4,
+			lr_end::Float64 = 0.0,
+			print_freq::Int = 500,
 			device::Union{Nothing, String} = nothing)
 	
 	# Import training function
@@ -239,7 +243,8 @@ function train_model!(model::TNPModel, sample_fn::Union{Py, Function};
 		model.model,
 		py_sample_fn,
 		num_iterations,
-		learning_rate,
+		lr_start,
+		lr_end,
 		print_freq,
 		device,
 		model_path,

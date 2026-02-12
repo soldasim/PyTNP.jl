@@ -91,5 +91,5 @@ if __name__ == "__main__":
         kernel_length_scale=0.4,
         kernel_variance=1.0,
         noise_variance=0.01,
-        save_path='data/tnp_predictions.png'
+        save_path='data/tnp_python_predictions.png'
     )
