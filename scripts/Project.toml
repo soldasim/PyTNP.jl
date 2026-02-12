@@ -1,3 +1,4 @@
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 PyTNP = "85852e71-9429-41d1-823f-6fff6908b212"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"

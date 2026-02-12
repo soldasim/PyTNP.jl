@@ -17,12 +17,79 @@ struct TNPModel
 end
 
 """
+	init_model(; x_dim::Int = 1,
+			y_dim::Int = 1,
+			dim_model::Int = 128,
+			embedder_depth::Int = 2,
+			predictor_depth::Int = 2,
+			num_heads::Int = 4,
+			encoder_depth::Int = 2,
+			dim_feedforward::Int = 512,
+			dropout::Float64 = 0.1,
+			device::Union{Nothing, String} = nothing)
+
+Initialize a Transformer Neural Process model.
+
+# Arguments
+- Model architecture parameters (must match training configuration)
+- `device`: Optional device override ("mps", "cuda", or "cpu")
+
+# Example
+```julia
+model = init_model()
+```
+"""
+function init_model(; x_dim::Int = 1,
+			y_dim::Int = 1,
+			dim_model::Int = 128,
+			embedder_depth::Int = 2,
+			predictor_depth::Int = 2,
+			num_heads::Int = 4,
+			encoder_depth::Int = 2,
+			dim_feedforward::Int = 512,
+			dropout::Float64 = 0.1,
+			device::Union{Nothing, String} = nothing)
+	# Import Python modules
+	torch = pyimport("torch")
+	tnp_module = pyimport("tnp")
+	initialize_tnp = tnp_module.initialize_tnp
+
+	# Determine device
+	if device === nothing
+		device = if pyconvert(Bool, torch.backends.mps.is_available())
+			"mps"
+		elseif pyconvert(Bool, torch.cuda.is_available())
+			"cuda"
+		else
+			"cpu"
+		end
+	end
+
+	py_model = initialize_tnp(
+		x_dim = x_dim,
+		y_dim = y_dim,
+		dim_model = dim_model,
+		embedder_depth = embedder_depth,
+		predictor_depth = predictor_depth,
+		num_heads = num_heads,
+		encoder_depth = encoder_depth,
+		dim_feedforward = dim_feedforward,
+		dropout = dropout,
+		device = device
+	)
+
+	return TNPModel(py_model, device)
+end
+
+"""
 	load_model(model_path::String = "tnp_model.pt";
 			   x_dim::Int = 1,
 			   y_dim::Int = 1,
 			   dim_model::Int = 128,
+			   embedder_depth::Int = 2,
+			   predictor_depth::Int = 2,
 			   num_heads::Int = 4,
-			   num_encoder_layers::Int = 2,
+			   encoder_depth::Int = 2,
 			   dim_feedforward::Int = 512,
 			   dropout::Float64 = 0.1)
 
@@ -34,18 +101,19 @@ Load the trained TNP model from a file.
 
 # Example
 ```julia
-model = PyTNP.load_model("tnp_model.pt")
+model = load_model("tnp_model.pt")
 ```
 """
 function load_model(model_path::String = "tnp_model.pt";
 					x_dim::Int = 1,
 					y_dim::Int = 1,
 					dim_model::Int = 128,
+					embedder_depth::Int = 2,
+					predictor_depth::Int = 2,
 					num_heads::Int = 4,
-					num_encoder_layers::Int = 2,
+					encoder_depth::Int = 2,
 					dim_feedforward::Int = 512,
 					dropout::Float64 = 0.1)
-	_setup_python_path!()
 	
 	# Import Python modules
 	torch = pyimport("torch")
@@ -66,8 +134,10 @@ function load_model(model_path::String = "tnp_model.pt";
 		x_dim = x_dim,
 		y_dim = y_dim,
 		dim_model = dim_model,
+		embedder_depth = embedder_depth,
+		predictor_depth = predictor_depth,
 		num_heads = num_heads,
-		num_encoder_layers = num_encoder_layers,
+		encoder_depth = encoder_depth,
 		dim_feedforward = dim_feedforward,
 		dropout = dropout
 	)
@@ -101,7 +171,7 @@ Make predictions with the TNP model.
 using PyTNP
 
 # Load model first
-model = PyTNP.load_model("tnp_model.pt")
+model = load_model("tnp_model.pt")
 
 # Define context and target points
 context_x = [-1.5, -1.0, -0.5, 0.0, 0.5]
@@ -109,7 +179,7 @@ context_y = [1.2, 0.8, 0.3, 0.1, 0.4]
 target_x = range(-2, 2, length=50) |> collect
 
 # Get predictions
-mean, std = PyTNP.predict(model, context_x, context_y, target_x)
+mean, std = predict(model, context_x, context_y, target_x)
 
 # Plot results
 using Plots
@@ -150,83 +220,46 @@ function predict(model::TNPModel, context_x::Vector{<:Real}, context_y::Vector{<
 end
 
 """
-	train_model(; model_path::Union{Nothing, String} = nothing,
-			save_path::Union{Nothing, String} = "tnp_model.pt",
-			x_dim::Int = 1,
-			y_dim::Int = 1,
-			dim_model::Int = 128,
-			num_heads::Int = 4,
-			num_encoder_layers::Int = 2,
-			dim_feedforward::Int = 512,
-			dropout::Float64 = 0.1,
+	train_model!(model::TNPModel, sample_fn::Union{Py, Function};
+			model_path::Union{Nothing, String} = nothing,
+			save_path::Union{Nothing, String} = "data/tnp_model.pt",
 			num_iterations::Int = 10000,
-			batch_size::Int = 16,
-			num_context_range::Tuple{Int, Int} = (3, 50),
-			num_total_points::Int = 100,
 			learning_rate::Float64 = 1e-4,
-			x_range::Tuple{Float64, Float64} = (-2.0, 2.0),
-			kernel_length_scale::Float64 = 0.4,
-			kernel_variance::Float64 = 1.0,
-			noise_variance::Float64 = 0.01,
 			print_freq::Int = 1000,
 			device::Union{Nothing, String} = nothing)
 
 Train the Transformer Neural Process model using the Python training loop.
 
 # Arguments
+- `model`: TNP model handle to train
+- `sample_fn`: Python callable or Julia function that returns (context_x, context_y, target_x, target_y)
 - `model_path`: Optional path to initial weights to load before training
 - `save_path`: Optional path to save the trained weights
-- Model architecture parameters (must match training configuration)
 - Training parameters (see `train.py`)
 
 # Returns
 - `Vector{Float64}`: Loss values over training iterations
 """
-function train_model(; model_path::Union{Nothing, String} = nothing,
+function train_model!(model::TNPModel, sample_fn::Union{Py, Function};
+			model_path::Union{Nothing, String} = nothing,
 			save_path::Union{Nothing, String} = "data/tnp_model.pt",
-			x_dim::Int = 1,
-			y_dim::Int = 1,
-			dim_model::Int = 128,
-			num_heads::Int = 4,
-			num_encoder_layers::Int = 2,
-			dim_feedforward::Int = 512,
-			dropout::Float64 = 0.1,
 			num_iterations::Int = 10000,
-			batch_size::Int = 16,
-			num_context_range::Tuple{Int, Int} = (3, 50),
-			num_total_points::Int = 100,
 			learning_rate::Float64 = 1e-4,
-			x_range::Tuple{Float64, Float64} = (-2.0, 2.0),
-			kernel_length_scale::Float64 = 0.4,
-			kernel_variance::Float64 = 1.0,
-			noise_variance::Float64 = 0.01,
 			print_freq::Int = 1000,
 			device::Union{Nothing, String} = nothing)
-	_setup_python_path!()
 	
 	# Import training function
 	train_module = pyimport("train")
 	train_tnp = train_module.train_tnp
 
+	py_sample_fn = _to_py_callable(sample_fn)
+
 	# Train model
 	losses = train_tnp(
-		nothing,
-		x_dim,
-		y_dim,
-		dim_model,
-		num_heads,
-		num_encoder_layers,
-		dim_feedforward,
-		dropout,
+		model.model,
+		py_sample_fn,
 		num_iterations,
-		batch_size,
-		num_context_range,
-		num_total_points,
 		learning_rate,
-		x_range,
-		kernel_length_scale,
-		kernel_variance,
-		noise_variance,
 		print_freq,
 		device,
 		model_path,
@@ -235,3 +268,6 @@ function train_model(; model_path::Union{Nothing, String} = nothing,
 
 	return pyconvert(Vector{Float64}, losses)
 end
+
+_to_py_callable(sample_fn::Py) = sample_fn
+_to_py_callable(sample_fn::Function) = Py(sample_fn)

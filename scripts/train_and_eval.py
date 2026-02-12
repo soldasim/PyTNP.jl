@@ -5,13 +5,15 @@ This script trains a TNP model on Gaussian Process samples and evaluates it
 by making predictions on test functions.
 """
 
-import torch
 import os
 import sys
+
+import torch
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
+from gp_sampler import make_gp_sampler
 from tnp import initialize_tnp
 from train import train_tnp
 from evaluate import evaluate_and_plot
@@ -38,7 +40,7 @@ if __name__ == "__main__":
         y_dim=1,
         dim_model=128,
         num_heads=4,
-        num_encoder_layers=2,
+        encoder_depth=2,
         device=device
     )
     
@@ -46,12 +48,22 @@ if __name__ == "__main__":
     
     if TRAIN_MODEL:
         print("\nTraining TNP model...")
-        losses = train_tnp(
-            model=model,
-            num_iterations=5000,
+        sample_batch = make_gp_sampler(
             batch_size=16,
             num_context_range=(3, 20),
             num_total_points=50,
+            x_range=(-2.0, 2.0),
+            kernel_length_scale=0.4,
+            kernel_variance=1.0,
+            noise_variance=0.01,
+            x_dim=model.x_dim,
+            y_dim=model.y_dim
+        )
+
+        losses = train_tnp(
+            model=model,
+            sample_batch=sample_batch,
+            num_iterations=5000,
             learning_rate=1e-4,
             print_freq=500,
             device=device

@@ -16,23 +16,33 @@ class TransformerNeuralProcess(nn.Module):
         x_dim: int = 1,
         y_dim: int = 1,
         dim_model: int = 128,
+        embedder_depth: int = 2,
+        predictor_depth: int = 2,
         num_heads: int = 4,
-        num_encoder_layers: int = 2,
+        encoder_depth: int = 2,
         dim_feedforward: int = 512,
         dropout: float = 0.1
     ):
         super().__init__()
-        
+
+        # Input validation
+        if embedder_depth < 1:
+            raise ValueError("embedder_depth must be >= 1")
+        if predictor_depth < 1:
+            raise ValueError("predictor_depth must be >= 1")
+
         self.x_dim = x_dim
         self.y_dim = y_dim
         self.dim_model = dim_model
+        self.embedder_depth = embedder_depth
+        self.predictor_depth = predictor_depth
         
         # Embedder: MLP that maps (x, y) pairs to embeddings
-        self.embedder = nn.Sequential(
-            nn.Linear(x_dim + y_dim, dim_model),
-            nn.ReLU(),
-            nn.Linear(dim_model, dim_model)
-        )
+        embedder_layers = [nn.Linear(x_dim + y_dim, dim_model)]
+        for _ in range(embedder_depth - 1):
+            embedder_layers.append(nn.ReLU())
+            embedder_layers.append(nn.Linear(dim_model, dim_model))
+        self.embedder = nn.Sequential(*embedder_layers)
         
         # Transformer encoder
         encoder_layer = nn.TransformerEncoderLayer(
@@ -44,15 +54,16 @@ class TransformerNeuralProcess(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(
             encoder_layer,
-            num_layers=num_encoder_layers
+            num_layers=encoder_depth
         )
         
         # Predictor: MLP that maps encodings to mean and std
-        self.predictor = nn.Sequential(
-            nn.Linear(dim_model, dim_model),
-            nn.ReLU(),
-            nn.Linear(dim_model, 2)  # Output: mean and std
-        )
+        predictor_layers = []
+        for _ in range(predictor_depth - 1):
+            predictor_layers.append(nn.Linear(dim_model, dim_model))
+            predictor_layers.append(nn.ReLU())
+        predictor_layers.append(nn.Linear(dim_model, 2))  # Output: mean and std
+        self.predictor = nn.Sequential(*predictor_layers)
         
     def forward(
         self,
@@ -116,8 +127,10 @@ def initialize_tnp(
     x_dim: int = 1,
     y_dim: int = 1,
     dim_model: int = 128,
+    embedder_depth: int = 2,
+    predictor_depth: int = 2,
     num_heads: int = 4,
-    num_encoder_layers: int = 2,
+    encoder_depth: int = 2,
     dim_feedforward: int = 512,
     dropout: float = 0.1,
     device: Optional[str] = None
@@ -129,8 +142,10 @@ def initialize_tnp(
         x_dim: Dimension of input x
         y_dim: Dimension of output y
         dim_model: Hidden dimension of transformer
+        embedder_depth: Number of layers in the embedder MLP
+        predictor_depth: Number of layers in the predictor MLP
         num_heads: Number of attention heads
-        num_encoder_layers: Number of transformer encoder layers
+        encoder_depth: Number of transformer encoder layers
         dim_feedforward: Dimension of feedforward network
         dropout: Dropout rate
         device: Device to place model on ('mps', 'cuda', or 'cpu')
@@ -150,11 +165,14 @@ def initialize_tnp(
         x_dim=x_dim,
         y_dim=y_dim,
         dim_model=dim_model,
+        embedder_depth=embedder_depth,
+        predictor_depth=predictor_depth,
         num_heads=num_heads,
-        num_encoder_layers=num_encoder_layers,
+        encoder_depth=encoder_depth,
         dim_feedforward=dim_feedforward,
         dropout=dropout
     )
     
     model = model.to(device)
+    model.eval()
     return model

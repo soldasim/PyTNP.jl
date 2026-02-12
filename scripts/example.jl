@@ -9,6 +9,7 @@ synthetic function, and plots results from Julia only.
 ENV["JULIA_PYTHONCALL_EXE"] = "/Users/soldasim/Documents/julia-pkg/PyTNP.jl/venv/bin/python"
 
 using PyTNP
+using PythonCall
 using CairoMakie
 using Random
 using Statistics
@@ -23,13 +24,38 @@ pred_plot_path = joinpath(data_dir, "tnp_julia_predictions.png")
 
 if isfile(model_path)
     println("Loading TNP model from $model_path ...")
-    model = PyTNP.load_model(model_path)
+    model = load_model(model_path)
 else
     println("No model found. Training a new model...")
-    losses = PyTNP.train_model(
+    gp_sampler = pyimport("gp_sampler")
+    
+    model = init_model(
+        x_dim = 1,
+        y_dim = 1,
+        dim_model = 128,
+        num_heads = 4,
+        encoder_depth = 2
+    )
+
+    sample_fn = gp_sampler.make_gp_sampler(
+        batch_size = 16,
+        num_context_range = (3, 50),
+        num_total_points = 100,
+        x_range = (-2.0, 2.0),
+        kernel_length_scale = 0.4,
+        kernel_variance = 1.0,
+        noise_variance = 0.01,
+        x_dim = pyconvert(Int, model.model.x_dim),
+        y_dim = pyconvert(Int, model.model.y_dim)
+    )
+
+    losses = train_model!(
+        model,
+        sample_fn;
         num_iterations = 2000,
         print_freq = 200,
-        save_path = model_path
+        save_path = model_path,
+        device = model.device
     )
 
     fig_loss = Figure()
@@ -42,8 +68,6 @@ else
     lines!(ax_loss, 1:length(losses), losses, linewidth = 2)
     save(loss_plot_path, fig_loss)
     println("Training loss plot saved to $loss_plot_path")
-
-    model = PyTNP.load_model(model_path)
 end
 
 println("Model loaded on device: $(model.device)")
@@ -58,7 +82,7 @@ target_x = collect(range(-2.0, 2.0, length = 200))
 target_y = f.(target_x)
 
 println("\nMaking predictions...")
-pred_mean, pred_std = PyTNP.predict(model, context_x, context_y, target_x)
+pred_mean, pred_std = predict(model, context_x, context_y, target_x)
 
 mse = mean((pred_mean .- target_y) .^ 2)
 println("Evaluation MSE: $mse")

@@ -36,15 +36,30 @@ Minimal API usage in Julia:
 ```julia
 ENV["JULIA_PYTHONCALL_EXE"] = "/path/to/venv/bin/python"
 using PyTNP
+using PythonCall
+gp_sampler = pyimport("gp_sampler")
+model = PyTNP.init_model(x_dim=1, y_dim=1)
 
-PyTNP.train_model(num_iterations=1000, save_path="data/tnp_model.pt")
-model = PyTNP.load_model("data/tnp_model.pt")
+sample_fn = gp_sampler.make_gp_sampler(
+	batch_size = 16,
+	num_context_range = (3, 50),
+	num_total_points = 100,
+	x_range = (-2.0, 2.0),
+	kernel_length_scale = 0.4,
+	kernel_variance = 1.0,
+	noise_variance = 0.01,
+	x_dim = pyconvert(Int, model.model.x_dim),
+	y_dim = pyconvert(Int, model.model.y_dim)
+)
+
+train_model!(model, sample_fn; num_iterations=1000, save_path="data/tnp_model.pt", device=model.device)
+model = load_model("data/tnp_model.pt")
 
 context_x = [-1.0, 0.0, 1.0]
 context_y = [0.5, 0.0, -0.2]
 target_x = collect(range(-2.0, 2.0, length=100))
 
-mean, std = PyTNP.predict(model, context_x, context_y, target_x)
+mean, std = predict(model, context_x, context_y, target_x)
 ```
 
 ## Python Usage

@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple
+from typing import Callable, Tuple
 
 
 def sample_gp_functions(
@@ -55,3 +55,47 @@ def sample_gp_functions(
             y[i, :, d] = np.random.multivariate_normal(mean, kernel_matrix)
     
     return x, y
+
+
+def make_gp_sampler(
+    batch_size: int = 16,
+    num_context_range: Tuple[int, int] = (3, 50),
+    num_total_points: int = 100,
+    x_range: Tuple[float, float] = (-2.0, 2.0),
+    kernel_length_scale: float = 0.4,
+    kernel_variance: float = 1.0,
+    noise_variance: float = 0.01,
+    x_dim: int = 1,
+    y_dim: int = 1
+) -> Callable[[], Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+    """
+    Build a sampler that returns context/target batches from GP samples.
+
+    Returns:
+        Callable that yields (context_x, context_y, target_x, target_y)
+    """
+    def sample_batch() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        x, y = sample_gp_functions(
+            num_samples=batch_size,
+            num_points=num_total_points,
+            x_range=x_range,
+            kernel_length_scale=kernel_length_scale,
+            kernel_variance=kernel_variance,
+            noise_variance=noise_variance,
+            x_dim=x_dim,
+            y_dim=y_dim
+        )
+
+        num_context = np.random.randint(num_context_range[0], num_context_range[1] + 1)
+        indices = np.random.permutation(num_total_points)
+        context_indices = indices[:num_context]
+        target_indices = indices[num_context:]
+
+        context_x = x[:, context_indices, :]
+        context_y = y[:, context_indices, :]
+        target_x = x[:, target_indices, :]
+        target_y = y[:, target_indices, :]
+
+        return context_x, context_y, target_x, target_y
+
+    return sample_batch
