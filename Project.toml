@@ -1,0 +1,16 @@
+name = "PyTNP"
+uuid = "85852e71-9429-41d1-823f-6fff6908b212"
+version = "0.1.0"
+authors = ["Šimon Soldát"]
+
+[deps]
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+
+[compat]
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
