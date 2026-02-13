@@ -136,20 +136,20 @@ function save_model(model::TNPModel, model_path::String = "tnp_model.pt")
 end
 
 """
-	predict(model::TNPModel, context_x::Vector{<:Real}, context_y::Vector{<:Real}, target_x::Vector{<:Real})
+	predict(model::TNPModel, context_x, context_y, target_x)
 
 Make predictions with the TNP model.
 
 # Arguments
-- `context_x::Vector{<:Real}`: Context input locations
-- `context_y::Vector{<:Real}`: Context output values
-- `target_x::Vector{<:Real}`: Target input locations
+- `context_x`: Context input locations (Vector or Matrix of size N×x_dim)
+- `context_y`: Context output values (Vector or Matrix of size N×y_dim)
+- `target_x`: Target input locations (Vector or Matrix of size M×x_dim)
 
 # Returns
-- `mean::Vector{Float64}`: Predicted means
-- `std::Vector{Float64}`: Predicted standard deviations
+- `mean`: Predicted means (Vector if y_dim=1, Matrix of size M×y_dim otherwise)
+- `std`: Predicted standard deviations (Vector if y_dim=1, Matrix of size M×y_dim otherwise)
 
-# Example
+# Example (1D)
 ```julia
 using PyTNP
 
@@ -169,21 +169,53 @@ using Plots
 plot(target_x, mean, ribbon=2*std, label="Prediction ±2σ")
 scatter!(context_x, context_y, label="Context", markersize=8)
 ```
+
+# Example (2D inputs, 1D outputs)
+```julia
+# 2D inputs
+context_x = rand(20, 2)  # 20 points in 2D space
+context_y = sin.(context_x[:, 1]) .* cos.(context_x[:, 2])  # 1D outputs
+target_x = rand(100, 2)  # 100 test points
+
+# Get predictions
+mean, std = predict(model, context_x, context_y, target_x)
+```
 """
-function predict(model::TNPModel, context_x::Vector{<:Real}, context_y::Vector{<:Real}, target_x::Vector{<:Real})
+function predict(model::TNPModel,
+    context_x::AbstractMatrix{<:Real}, 
+    context_y::AbstractMatrix{<:Real}, 
+    target_x::AbstractMatrix{<:Real},
+)
+    # Reshape from (dim, N) to (dim, N, 1) for single batch
+    context_x_3d = reshape(context_x, size(context_x)..., 1)
+    context_y_3d = reshape(context_y, size(context_y)..., 1)
+    target_x_3d = reshape(target_x, size(target_x)..., 1)
+    
+    return predict(model, context_x_3d, context_y_3d, target_x_3d)
+end
+
+function predict(model::TNPModel,
+    context_x::AbstractArray{<:Real, 3}, 
+    context_y::AbstractArray{<:Real, 3}, 
+    target_x::AbstractArray{<:Real, 3},
+)
 	torch = pyimport("torch")
 	np = pyimport("numpy")
 	
-	# Convert to PyTorch tensors [1, N, 1]
-	context_x_arr = Array(reshape(Float32.(collect(context_x)), 1, :, 1))
-	context_y_arr = Array(reshape(Float32.(collect(context_y)), 1, :, 1))
-	target_x_arr = Array(reshape(Float32.(collect(target_x)), 1, :, 1))
-	context_x_np = np.asarray(context_x_arr, dtype=np.float32)
-	context_y_np = np.asarray(context_y_arr, dtype=np.float32)
-	target_x_np = np.asarray(target_x_arr, dtype=np.float32)
-	context_x_tensor = torch.from_numpy(context_x_np).to(model.device)
-	context_y_tensor = torch.from_numpy(context_y_np).to(model.device)
-	target_x_tensor = torch.from_numpy(target_x_np).to(model.device)
+	# Helper to convert Julia 3D array to PyTorch tensor
+	# Julia is column-major, NumPy/PyTorch is row-major
+	# We need to permute: (dim, N, batch) -> (batch, N, dim)
+	function to_tensor(data::AbstractArray{<:Real, 3})
+		arr = permutedims(data, (3, 2, 1))
+		np_arr = np.asarray(arr, dtype=np.float32)
+		tensor = torch.from_numpy(np_arr).to(model.device)
+		return tensor
+	end
+	
+	# Convert to PyTorch tensors [batch, N, dim]
+	context_x_tensor = to_tensor(context_x)
+	context_y_tensor = to_tensor(context_y)
+	target_x_tensor = to_tensor(target_x)
 	
 	# Make predictions with no gradient
 	with_no_grad = torch.no_grad()
@@ -193,8 +225,20 @@ function predict(model::TNPModel, context_x::Vector{<:Real}, context_y::Vector{<
 		pred_mean, pred_std = model.model(context_x_tensor, context_y_tensor, target_x_tensor)
 		
 		# Convert back to Julia arrays
-		mean = pyconvert(Vector{Float64}, pred_mean[0, pybuiltins.slice(nothing), 0].cpu().numpy())
-		std = pyconvert(Vector{Float64}, pred_std[0, pybuiltins.slice(nothing), 0].cpu().numpy())
+		# pred_mean and pred_std have shape [1, M, y_dim]
+		y_dim = pyconvert(Int, pred_mean.shape[2])
+		
+		if y_dim == 1
+			# Return as vectors for y_dim=1
+			mean = pyconvert(Vector{Float64}, pred_mean[0, pybuiltins.slice(nothing), 0].cpu().numpy())
+			std = pyconvert(Vector{Float64}, pred_std[0, pybuiltins.slice(nothing), 0].cpu().numpy())
+		else
+			# Return as matrices for y_dim>1
+			mean_np = pyconvert(Array{Float64}, pred_mean[0, pybuiltins.slice(nothing), pybuiltins.slice(nothing)].cpu().numpy())
+			std_np = pyconvert(Array{Float64}, pred_std[0, pybuiltins.slice(nothing), pybuiltins.slice(nothing)].cpu().numpy())
+			mean = mean_np'
+			std = std_np'
+		end
 		
 		return mean, std
 	finally

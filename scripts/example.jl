@@ -84,7 +84,7 @@ target_x = collect(range(-2.0, 2.0, length = 200))
 target_y = f.(target_x)
 
 println("\nMaking predictions...")
-pred_mean, pred_std = predict(model, context_x, context_y, target_x)
+pred_mean, pred_std = predict(model, context_x', context_y', target_x')
 
 mse = mean((pred_mean .- target_y) .^ 2)
 println("Evaluation MSE: $mse")

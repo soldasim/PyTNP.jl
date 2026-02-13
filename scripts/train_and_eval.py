@@ -22,7 +22,7 @@ from evaluate import evaluate_and_plot
 
 if __name__ == "__main__":
     # Configuration
-    MODEL_PATH = "data/tnp_model.pt"
+    MODEL_PATH = "data/tnp_model_py.pt"
     TRAIN_MODEL = not os.path.exists(MODEL_PATH)
     
     # Determine device
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     
     print("\nInitializing TNP model...")
     model = initialize_tnp(
-        x_dim=1,
+        x_dim=1, # TODO try x_dim=2
         y_dim=1,
         dim_model=128,
         num_heads=4,
@@ -61,12 +61,11 @@ if __name__ == "__main__":
             y_dim=model.y_dim
         )
 
-        losses = train_tnp(
+        _, losses, _ = train_tnp(
             model=model,
             sample_batch=sample_batch,
-            num_iterations=5000,
-            learning_rate=1e-4,
-            print_freq=500,
+            num_iterations=2000, # TODO increase to 10_000
+            print_freq=100,
             device=device
         )
         

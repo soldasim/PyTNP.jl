@@ -40,11 +40,12 @@ def sample_gp_functions(
     # Sample from GP for each batch and output dimension
     for i in range(num_samples):
         for d in range(y_dim):
-            # Compute RBF kernel matrix
-            x_i = x[i, :, 0]  # [num_points]
-            x_diff = x_i[:, None] - x_i[None, :]  # [num_points, num_points]
+            # Compute RBF kernel matrix using all input dimensions
+            x_i = x[i, :, :]  # [num_points, x_dim]
+            # Compute pairwise squared Euclidean distances across all dimensions
+            x_diff_sq = np.sum((x_i[:, None, :] - x_i[None, :, :]) ** 2, axis=2)  # [num_points, num_points]
             kernel_matrix = kernel_variance * np.exp(
-                -0.5 * x_diff ** 2 / kernel_length_scale ** 2
+                -0.5 * x_diff_sq / kernel_length_scale ** 2
             )
             
             # Add noise to diagonal for numerical stability
