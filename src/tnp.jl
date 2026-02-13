@@ -39,16 +39,18 @@ Initialize a Transformer Neural Process model.
 model = init_model()
 ```
 """
-function init_model(; x_dim::Int = 1,
-			y_dim::Int = 1,
-			dim_model::Int = 128,
-			embedder_depth::Int = 2,
-			predictor_depth::Int = 2,
-			num_heads::Int = 4,
-			encoder_depth::Int = 2,
-			dim_feedforward::Int = 512,
-			dropout::Float64 = 0.1,
-			device::Union{Nothing, String} = nothing)
+function init_model(;
+    x_dim::Int = 1,
+    y_dim::Int = 1,
+    dim_model::Int = 128,
+    embedder_depth::Int = 2,
+    predictor_depth::Int = 2,
+    num_heads::Int = 4,
+    encoder_depth::Int = 2,
+    dim_feedforward::Int = 512,
+    dropout::Float64 = 0.1,
+    device::Union{Nothing, String} = nothing,
+)
 	# Import Python modules
 	torch = pyimport("torch")
 	tnp_module = pyimport("tnp")
@@ -97,7 +99,8 @@ model = load_model("tnp_model.pt")
 ```
 """
 function load_model(model_path::String = "tnp_model.pt";
-					device::Union{Nothing, String} = nothing)
+    device::Union{Nothing, String} = nothing,
+)
 	# Import Python modules
 	torch = pyimport("torch")
 	weights = pyimport("weights")
@@ -221,17 +224,22 @@ Train the Transformer Neural Process model using the Python training loop.
 - Training parameters (see `train.py`)
 
 # Returns
+- `Vector{Float64}`: Learning rates over training iterations
 - `Vector{Float64}`: Loss values over training iterations
+- `Vector{Float64}`: Rolling average loss values over training iterations
 """
 function train_model!(model::TNPModel, sample_fn::Union{Py, Function};
-			model_path::Union{Nothing, String} = nothing,
-			save_path::Union{Nothing, String} = "data/tnp_model.pt",
-			num_iterations::Int = 10_000,
-			lr_start::Float64 = 1e-4,
-			lr_end::Float64 = 0.0,
-			print_freq::Int = 500,
-			device::Union{Nothing, String} = nothing)
-	
+    model_path::Union{Nothing, String} = nothing,
+    save_path::Union{Nothing, String} = "data/tnp_model.pt",
+    num_iterations::Int = 10_000,
+    lr_start::Float64 = 5e-4,
+    lr_end::Float64 = 0.0,
+    warmup_ratio::Float64 = 0.05,
+    start_factor::Float64 = 0.05,
+    rolling_window::Int = 100,
+    print_freq::Int = 500,
+    device::Union{Nothing, String} = nothing,
+)	
 	# Import training function
 	train_module = pyimport("train")
 	train_tnp = train_module.train_tnp
@@ -239,19 +247,22 @@ function train_model!(model::TNPModel, sample_fn::Union{Py, Function};
 	py_sample_fn = _to_py_callable(sample_fn)
 
 	# Train model
-	losses = train_tnp(
-		model.model,
-		py_sample_fn,
-		num_iterations,
-		lr_start,
-		lr_end,
-		print_freq,
-		device,
-		model_path,
-		save_path
+	learning_rates, losses, rolling_avg_losses = train_tnp(model.model, py_sample_fn,
+		num_iterations = num_iterations,
+		lr_start = lr_start,
+		lr_end = lr_end,
+		warmup_ratio = warmup_ratio,
+		start_factor = start_factor,
+		rolling_window = rolling_window,
+		print_freq = print_freq,
+		device = device,
+		model_path = model_path,
+		save_path = save_path
 	)
 
-	return pyconvert(Vector{Float64}, losses)
+	return pyconvert(Vector{Float64}, learning_rates),
+            pyconvert(Vector{Float64}, losses),
+            pyconvert(Vector{Float64}, rolling_avg_losses)
 end
 
 _to_py_callable(sample_fn::Py) = sample_fn

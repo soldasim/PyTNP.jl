@@ -20,13 +20,16 @@ def train_tnp(
     model: TransformerNeuralProcess,
     sample_batch: Callable[[], Tuple[object, object, object, object]],
     num_iterations: int = 10_000,
-    lr_start: float = 1e-4,
+    lr_start: float = 5e-4,
     lr_end: float = 0.0,
+    warmup_ratio: float = 0.05,
+    start_factor: float = 0.05,
+    rolling_window: int = 100,
     print_freq: int = 500,
     device: Optional[str] = None,
     model_path: Optional[str] = None,
     save_path: Optional[str] = None
-) -> list:
+) -> Tuple[list, list, list]:
     """
     Train the Transformer Neural Process model on sampled data.
     
@@ -34,16 +37,21 @@ def train_tnp(
         model: TNP model to train
         sample_batch: Callable that returns (context_x, context_y, target_x, target_y)
         num_iterations: Number of training iterations
-        lr_start: Starting learning rate for cosine annealing
+        lr_start: Starting learning rate
         lr_end: Ending learning rate for cosine annealing
+        warmup_ratio: Fraction of total iterations to use for linear warmup (0.0-1.0)
+        start_factor: Initial learning rate factor during warmup (fraction of lr_start)
+        rolling_window: Window size for computing rolling average of loss
         print_freq: Print loss every N iterations
         device: Device to use for training
-        model_path: Optional path to load initial weights
-        save_path: Optional path to save trained weights
+        model_path: Optional[str] = None,
+        save_path: Optional[str] = None
         
     Returns:
-        List of losses during training
+        Tuple of (losses, learning_rates, rolling_avg_losses) lists during training
     """
+    print("model_path: ", model_path) # TODO rem
+    
     if model_path is not None:
         load_state_dict(model, model_path, strict=True)
 
@@ -56,14 +64,34 @@ def train_tnp(
             device = 'cpu'
     
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr_start)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr_start)
+    
+    # Calculate warmup iterations based on ratio
+    warmup_iter = int(warmup_ratio * num_iterations)
+    
+    # Linear warmup followed by cosine annealing
+    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
         optimizer,
-        T_max=num_iterations,
+        start_factor=start_factor,
+        total_iters=warmup_iter
+    )
+    cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=num_iterations - warmup_iter,
         eta_min=lr_end
     )
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[warmup_iter]
+    )
+    
+    # Gaussian negative log-likelihood loss
+    loss_fn = torch.nn.GaussianNLLLoss(full=False, reduction='mean')
     
     losses = []
+    learning_rates = []
+    rolling_avg_losses = []
     
     for iteration in range(num_iterations):
         model.train()
@@ -81,10 +109,7 @@ def train_tnp(
         pred_mean, pred_std = model(context_x, context_y, target_x)
         
         # Compute negative log-likelihood loss
-        loss = 0.5 * (
-            torch.log(pred_std ** 2) +
-            (target_y - pred_mean) ** 2 / (pred_std ** 2)
-        ).mean()
+        loss = loss_fn(pred_mean, target_y, pred_std ** 2)
         
         # Backward pass
         loss.backward()
@@ -94,13 +119,19 @@ def train_tnp(
         # Record loss
         loss_value = loss.item()
         losses.append(loss_value)
+        current_lr = optimizer.param_groups[0]["lr"]
+        learning_rates.append(current_lr)
+        
+        # Compute rolling average
+        window_start = max(0, len(losses) - rolling_window)
+        rolling_avg = sum(losses[window_start:]) / (len(losses) - window_start)
+        rolling_avg_losses.append(rolling_avg)
         
         # Print progress
         if (iteration + 1) % print_freq == 0:
-            current_lr = optimizer.param_groups[0]["lr"]
             print(
                 f"Iteration {iteration + 1}/{num_iterations}, "
-                f"Loss: {loss_value:.4f}, LR: {current_lr:.6g}"
+                f"Loss: {loss_value:.4f}, Rolling Avg: {rolling_avg:.4f}, LR: {current_lr:.6g}"
             )
 
     model.eval()
@@ -108,4 +139,4 @@ def train_tnp(
     if save_path is not None:
         save_model(model, save_path)
     
-    return losses
+    return learning_rates, losses, rolling_avg_losses

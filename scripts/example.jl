@@ -39,23 +39,23 @@ else
 
     sample_fn = gp_sampler.make_gp_sampler(
         batch_size = 16,
-        num_context_range = (3, 50),
+        num_context_range = (1, 99),
         num_total_points = 100,
         x_range = (-2.0, 2.0),
-        kernel_length_scale = 0.4,
+        kernel_length_scale = 1.0,
         kernel_variance = 1.0,
-        noise_variance = 0.01,
+        noise_variance = 1e-8,
         x_dim = pyconvert(Int, model.model.x_dim),
         y_dim = pyconvert(Int, model.model.y_dim)
     )
 
-    losses = train_model!(
+    _, losses, avg_losses = train_model!(
         model,
         sample_fn;
-        num_iterations = 2000,
+        num_iterations = 10_000,
         print_freq = 100,
         save_path = model_path,
-        device = model.device
+        device = model.device,
     )
 
     fig_loss = Figure()
@@ -65,7 +65,9 @@ else
         ylabel = "Loss",
         title = "Training Loss"
     )
-    lines!(ax_loss, 1:length(losses), losses, linewidth = 2)
+    lines!(ax_loss, 1:length(losses), losses, linewidth = 1, alpha = 0.3, label = "Loss")
+    lines!(ax_loss, 1:length(avg_losses), avg_losses, linewidth = 2, color = :red, label = "Rolling Average")
+    axislegend(ax_loss, position = :rt)
     save(loss_plot_path, fig_loss)
     println("Training loss plot saved to $loss_plot_path")
 end
@@ -76,7 +78,7 @@ Random.seed!(42)
 f(x) = sin(x)
 
 context_x = collect(range(-2.0, 2.0, length = 12))
-context_y = f.(context_x) .+ 0.05 .* randn(length(context_x))
+context_y = f.(context_x)
 
 target_x = collect(range(-2.0, 2.0, length = 200))
 target_y = f.(target_x)

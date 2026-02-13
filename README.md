@@ -38,7 +38,7 @@ ENV["JULIA_PYTHONCALL_EXE"] = "/path/to/venv/bin/python"
 using PyTNP
 using PythonCall
 gp_sampler = pyimport("gp_sampler")
-model = PyTNP.init_model(x_dim=1, y_dim=1)
+model = init_model(x_dim=1, y_dim=1)
 
 sample_fn = gp_sampler.make_gp_sampler(
 	batch_size = 16,
@@ -53,7 +53,6 @@ sample_fn = gp_sampler.make_gp_sampler(
 )
 
 train_model!(model, sample_fn; num_iterations=1000, save_path="data/tnp_model.pt", device=model.device)
-model = load_model("data/tnp_model.pt")
 
 context_x = [-1.0, 0.0, 1.0]
 context_y = [0.5, 0.0, -0.2]
