@@ -37,14 +37,14 @@ else
         encoder_depth = 2
     )
 
+    x_bounds = (-1.0, 1.0)
     sample_fn = gp_sampler.make_gp_sampler(
-        batch_size = 16,
-        num_context_range = (1, 99),
-        num_total_points = 100,
-        x_range = (-2.0, 2.0),
-        kernel_length_scale = 1.0,
-        kernel_variance = 1.0,
-        noise_variance = 1e-8,
+        batch_size = 32,
+        num_total_points_range = (2, 101),
+        x_range = x_bounds,
+        kernel_length_scale_prior = (0.1, 2.0),
+        kernel_std_prior = (0.1, 1.0),
+        noise_std = 1e-8,
         x_dim = pyconvert(Int, model.model.x_dim),
         y_dim = pyconvert(Int, model.model.y_dim)
     )
@@ -75,12 +75,12 @@ end
 println("Model loaded on device: $(model.device)")
 
 Random.seed!(42)
-f(x) = sin(x)
+f(x) = sin(π * x)
 
-context_x = collect(range(-2.0, 2.0, length = 12))
+context_x = collect(range(x_bounds..., length = 12))
 context_y = f.(context_x)
 
-target_x = collect(range(-2.0, 2.0, length = 200))
+target_x = collect(range(x_bounds..., length = 200))
 target_y = f.(target_x)
 
 println("\nMaking predictions...")

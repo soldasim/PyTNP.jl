@@ -5,7 +5,7 @@ from matplotlib import cm
 from typing import Tuple, Optional, List
 
 from tnp import TransformerNeuralProcess
-from gp_sampler import sample_gp_functions
+from gp_sampler import sample_gp_functions, PriorSpec
 
 
 def _plot_1d(
@@ -148,8 +148,10 @@ def evaluate_and_plot(
     num_context_points: int = 10,
     x_range: Tuple[float, float] = (-2.0, 2.0),
     kernel_length_scale: float = 0.4,
-    kernel_variance: float = 1.0,
-    noise_variance: float = 0.01,
+    kernel_std: float = 1.0,
+    noise_std: float = 0.1,
+    kernel_length_scale_prior: PriorSpec = None,
+    kernel_std_prior: PriorSpec = None,
     save_path: Optional[str] = 'tnp_predictions.png'
 ):
     """
@@ -163,8 +165,10 @@ def evaluate_and_plot(
         num_context_points: Number of context points to use
         x_range: Range for x values
         kernel_length_scale: GP kernel length scale
-        kernel_variance: GP kernel variance
-        noise_variance: GP noise variance
+        kernel_std: GP kernel std dev
+        noise_std: GP noise std dev
+        kernel_length_scale_prior: Prior for length scale (low, high)
+        kernel_std_prior: Prior for kernel std dev (low, high)
         save_path: Path to save the plot (None to skip saving)
     """
     print("\n" + "="*60)
@@ -185,16 +189,18 @@ def evaluate_and_plot(
             num_points=num_test_points,
             x_range=x_range,
             kernel_length_scale=kernel_length_scale,
-            kernel_variance=kernel_variance,
-            noise_variance=0.0,
+            kernel_std=kernel_std,
+            noise_std=0.0,
+            kernel_length_scale_prior=kernel_length_scale_prior,
+            kernel_std_prior=kernel_std_prior,
             x_dim=x_dim,
             y_dim=y_dim
         )
 
         # Add observation noise for context/target values
-        if noise_variance > 0:
+        if noise_std > 0:
             y_obs = y_true + np.random.normal(
-                scale=np.sqrt(noise_variance),
+                scale=noise_std,
                 size=y_true.shape
             )
         else:

@@ -37,14 +37,14 @@ else
         encoder_depth = 2
     )
 
+    x_bounds = (-1.0, 1.0)
     sample_fn = gp_sampler.make_gp_sampler(
-        batch_size = 16,
-        num_context_range = (1, 99),
-        num_total_points = 100,
-        x_range = (-2.0, 2.0),
-        kernel_length_scale = 1.0,
-        kernel_variance = 1.0,
-        noise_variance = 1e-8,
+        batch_size = 32,
+        num_total_points_range = (2, 101),
+        x_range = x_bounds,
+        kernel_length_scale_prior = (0.1, 2.0),
+        kernel_std_prior = (0.1, 1.0),
+        noise_std = 1e-8,
         x_dim = pyconvert(Int, model.model.x_dim),
         y_dim = pyconvert(Int, model.model.y_dim)
     )
@@ -76,19 +76,19 @@ println("Model loaded on device: $(model.device)")
 
 Random.seed!(42)
 # 2D function: f(x1, x2) = sin(x1) * cos(x2)
-f(x1, x2) = sin(x1) * cos(x2)
+f(x1, x2) = sin(π * x1) * cos(π * x2)
 
 # Create context points: random samples in 2D space
 n_context = 50
-context_x1 = rand(n_context) .* 4.0 .- 2.0  # Random points in [-2, 2]
-context_x2 = rand(n_context) .* 4.0 .- 2.0
+context_x1 = rand(n_context) .* (x_bounds[2] - x_bounds[1]) .+ x_bounds[1]  # Shape: (n_context,)
+context_x2 = rand(n_context) .* (x_bounds[2] - x_bounds[1]) .+ x_bounds[1]
 context_x = hcat(context_x1, context_x2)  # Shape: (n_context, 2)
 context_y = f.(context_x1, context_x2)
 
 # Create target points: grid in 2D space
 grid_size = 50
-target_x1 = repeat(range(-2.0, 2.0, length = grid_size), grid_size)
-target_x2 = repeat(range(-2.0, 2.0, length = grid_size), inner = grid_size)
+target_x1 = repeat(range(x_bounds..., length = grid_size), grid_size)
+target_x2 = repeat(range(x_bounds..., length = grid_size), inner = grid_size)
 target_x = hcat(target_x1, target_x2)  # Shape: (grid_size^2, 2)
 target_y = f.(target_x1, target_x2)
 
@@ -113,7 +113,7 @@ ax1 = Axis(
     title = "True Function",
     aspect = DataAspect()
 )
-hm1 = heatmap!(ax1, range(-2.0, 2.0, length = grid_size), range(-2.0, 2.0, length = grid_size), target_y_grid, colormap = :viridis)
+hm1 = heatmap!(ax1, range(x_bounds..., length = grid_size), range(x_bounds..., length = grid_size), target_y_grid, colormap = :viridis)
 scatter!(ax1, context_x1, context_x2, color = :red, markersize = 10, strokewidth = 2, strokecolor = :white, label = "Context")
 Colorbar(fig[1, 2], hm1)
 
@@ -125,7 +125,7 @@ ax2 = Axis(
     title = "TNP Prediction Mean",
     aspect = DataAspect()
 )
-hm2 = heatmap!(ax2, range(-2.0, 2.0, length = grid_size), range(-2.0, 2.0, length = grid_size), pred_mean_grid, colormap = :viridis)
+hm2 = heatmap!(ax2, range(x_bounds..., length = grid_size), range(x_bounds..., length = grid_size), pred_mean_grid, colormap = :viridis)
 scatter!(ax2, context_x1, context_x2, color = :red, markersize = 10, strokewidth = 2, strokecolor = :white, label = "Context")
 Colorbar(fig[1, 4], hm2)
 
@@ -137,7 +137,7 @@ ax3 = Axis(
     title = "TNP Prediction Std",
     aspect = DataAspect()
 )
-hm3 = heatmap!(ax3, range(-2.0, 2.0, length = grid_size), range(-2.0, 2.0, length = grid_size), pred_std_grid, colormap = :plasma)
+hm3 = heatmap!(ax3, range(x_bounds..., length = grid_size), range(x_bounds..., length = grid_size), pred_std_grid, colormap = :plasma)
 scatter!(ax3, context_x1, context_x2, color = :red, markersize = 10, strokewidth = 2, strokecolor = :white, label = "Context")
 Colorbar(fig[1, 6], hm3)
 

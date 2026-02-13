@@ -50,13 +50,12 @@ if __name__ == "__main__":
     if TRAIN_MODEL:
         print("\nTraining TNP model...")
         sample_batch = make_gp_sampler(
-            batch_size=16,
-            num_context_range=(3, 20),
-            num_total_points=50,
+            batch_size=32,
+            num_total_points_range=(2, 101),
             x_range=(-2.0, 2.0),
-            kernel_length_scale=0.4,
-            kernel_variance=1.0,
-            noise_variance=0.01,
+            kernel_length_scale_prior=(0.1, 2.0),
+            kernel_std_prior=(0.1, 1.0),
+            noise_std=1e-8,
             x_dim=model.x_dim,
             y_dim=model.y_dim
         )
@@ -87,8 +86,8 @@ if __name__ == "__main__":
         num_test_points=200,
         num_context_points=10,
         x_range=(-2.0, 2.0),
-        kernel_length_scale=0.4,
-        kernel_variance=1.0,
-        noise_variance=0.01,
+        kernel_length_scale_prior=(0.1, 2.0),
+        kernel_std_prior=(0.1, 1.0),
+        noise_std=1e-8,
         save_path='data/tnp_python_predictions.png'
     )
