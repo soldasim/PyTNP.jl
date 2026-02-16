@@ -15,13 +15,13 @@ class TransformerNeuralProcess(nn.Module):
         self,
         x_dim: int = 1,
         y_dim: int = 1,
-        dim_model: int = 128,
-        embedder_depth: int = 2,
+        dim_model: int = 64,
+        embedder_depth: int = 4,
         predictor_depth: int = 2,
-        num_heads: int = 4,
-        encoder_depth: int = 2,
-        dim_feedforward: int = 512,
-        dropout: float = 0.1
+        num_heads: int = 8,
+        encoder_depth: int = 6,
+        dim_feedforward: int = 128,
+        dropout: float = 0.0
     ):
         super().__init__()
 

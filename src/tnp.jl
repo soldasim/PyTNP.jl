@@ -42,13 +42,13 @@ model = init_model()
 function init_model(;
     x_dim::Int = 1,
     y_dim::Int = 1,
-    dim_model::Int = 128,
-    embedder_depth::Int = 2,
+    dim_model::Int = 64,
+    embedder_depth::Int = 4,
     predictor_depth::Int = 2,
-    num_heads::Int = 4,
-    encoder_depth::Int = 2,
-    dim_feedforward::Int = 512,
-    dropout::Float64 = 0.1,
+    num_heads::Int = 8,
+    encoder_depth::Int = 6,
+    dim_feedforward::Int = 2 * dim_model,
+    dropout::Float64 = 0.0,
     device::Union{Nothing, String} = nothing,
 )
 	# Import Python modules

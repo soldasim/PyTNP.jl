@@ -32,15 +32,12 @@ else
     model = init_model(
         x_dim = 2,
         y_dim = 1,
-        dim_model = 128,
-        num_heads = 4,
-        encoder_depth = 2
     )
 
     x_bounds = (-1.0, 1.0)
     sample_fn = gp_sampler.make_gp_sampler(
         batch_size = 32,
-        num_total_points_range = (2, 101),
+        num_total_points_range = (64, 256),
         x_range = x_bounds,
         kernel_length_scale_prior = (0.1, 2.0),
         kernel_std_prior = (0.1, 1.0),
@@ -52,7 +49,7 @@ else
     _, losses, avg_losses = train_model!(
         model,
         sample_fn;
-        num_iterations = 2000,
+        num_iterations = 10_000,
         print_freq = 100,
         save_path = model_path,
         device = model.device,
