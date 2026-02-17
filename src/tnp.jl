@@ -6,12 +6,16 @@ function _setup_python_path!()
 	end
 end
 
+abstract type TNPType end
+struct StandardTNP <: TNPType end
+
 """
 	TNPModel
 
 Handle for a loaded Transformer Neural Process model and its device.
 """
-struct TNPModel
+struct TNPModel{T<:TNPType}
+    mode::T
 	model::Py
 	device::String
 end
@@ -50,6 +54,7 @@ function init_model(;
     dim_feedforward::Int = 2 * dim_model,
     dropout::Float64 = 0.0,
     device::Union{Nothing, String} = nothing,
+    mode::TNPType = StandardTNP(),
 )
 	# Import Python modules
 	torch = pyimport("torch")
@@ -80,7 +85,7 @@ function init_model(;
 		device = device
 	)
 
-	return TNPModel(py_model, device)
+	return TNPModel(mode, py_model, device)
 end
 
 """
@@ -100,6 +105,7 @@ model = load_model("tnp_model.pt")
 """
 function load_model(model_path::String = "tnp_model.pt";
     device::Union{Nothing, String} = nothing,
+    mode::TNPType = StandardTNP(),
 )
 	# Import Python modules
 	torch = pyimport("torch")
@@ -118,7 +124,7 @@ function load_model(model_path::String = "tnp_model.pt";
 
 	py_model = weights.load_model(model_path, device=device)
 	println("Model loaded successfully on device: $(device)")
-	return TNPModel(py_model, device)
+	return TNPModel(mode, py_model, device)
 end
 
 """
@@ -181,7 +187,25 @@ target_x = rand(100, 2)  # 100 test points
 mean, std = predict(model, context_x, context_y, target_x)
 ```
 """
-function predict(model::TNPModel,
+function predict(model::TNPModel, context_x, context_y, target_x)
+    return _predict(model.mode, model, context_x, context_y, target_x)
+end
+
+# Convert 1D vector to 2D matrix
+function _predict(
+    mode::TNPType,
+    model::TNPModel,
+    context_x::AbstractMatrix{<:Real}, 
+    context_y::AbstractMatrix{<:Real}, 
+    target_x::AbstractVector{<:Real},
+)    
+    return _predict(mode, model, context_x, context_y, hcat(target_x))
+end
+
+# Convert 2D matrices to 3D arrays
+function _predict(
+    mode::TNPType,
+    model::TNPModel,
     context_x::AbstractMatrix{<:Real}, 
     context_y::AbstractMatrix{<:Real}, 
     target_x::AbstractMatrix{<:Real},
@@ -191,10 +215,13 @@ function predict(model::TNPModel,
     context_y_3d = reshape(context_y, size(context_y)..., 1)
     target_x_3d = reshape(target_x, size(target_x)..., 1)
     
-    return predict(model, context_x_3d, context_y_3d, target_x_3d)
+    return _predict(mode, model, context_x_3d, context_y_3d, target_x_3d)
 end
 
-function predict(model::TNPModel,
+# The `StandardTNP` prediction mode
+function _predict(
+    ::StandardTNP,
+    model::TNPModel,
     context_x::AbstractArray{<:Real, 3}, 
     context_y::AbstractArray{<:Real, 3}, 
     target_x::AbstractArray{<:Real, 3},

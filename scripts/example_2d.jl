@@ -22,9 +22,13 @@ model_path = joinpath(data_dir, "tnp_model_2d.pt")
 loss_plot_path = joinpath(data_dir, "tnp_training_loss_2d.png")
 pred_plot_path = joinpath(data_dir, "tnp_predictions_2d.png")
 
+mode = StandardTNP()
+# mode = KNNTNP(10)
+x_bounds = (-1.0, 1.0)
+
 if isfile(model_path)
     println("Loading TNP model from $model_path ...")
-    model = load_model(model_path)
+    model = load_model(model_path; mode)
 else
     println("No model found. Training a new model...")
     gp_sampler = pyimport("gp_sampler")
@@ -32,9 +36,8 @@ else
     model = init_model(
         x_dim = 2,
         y_dim = 1,
+        mode,
     )
-
-    x_bounds = (-1.0, 1.0)
     sample_fn = gp_sampler.make_gp_sampler(
         batch_size = 32,
         num_total_points_range = (64, 256),
