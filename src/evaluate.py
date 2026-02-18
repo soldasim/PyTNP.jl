@@ -225,8 +225,9 @@ def evaluate_and_plot(
             target_x = x_test[i:i+1, num_context_points:, :]
             target_y_true = y_true[i:i+1, num_context_points:, :]
             
-            # Get predictions
-            pred_mean, pred_std = model(context_x, context_y, target_x)
+            # Get predictions (model returns mean and log_std)
+            pred_mean, pred_log_std = model(context_x, context_y, target_x)
+            pred_std = torch.exp(pred_log_std)
             
             # Move to CPU for plotting
             context_x_list.append(context_x[0].cpu().numpy())

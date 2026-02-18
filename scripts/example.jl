@@ -22,6 +22,8 @@ model_path = joinpath(data_dir, "tnp_model.pt")
 loss_plot_path = joinpath(data_dir, "tnp_training_loss.png")
 pred_plot_path = joinpath(data_dir, "tnp_predictions.png")
 
+x_bounds = (-1.0, 1.0)
+
 if isfile(model_path)
     println("Loading TNP model from $model_path ...")
     model = load_model(model_path)
@@ -34,7 +36,6 @@ else
         y_dim = 1,
     )
 
-    x_bounds = (-1.0, 1.0)
     sample_fn = gp_sampler.make_gp_sampler(
         batch_size = 32,
         num_total_points_range = (64, 256),

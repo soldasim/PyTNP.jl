@@ -61,12 +61,12 @@ class TransformerNeuralProcess(nn.Module):
             num_layers=encoder_depth
         )
         
-        # Predictor: MLP that maps encodings to mean and std
+        # Predictor: MLP that maps encodings to mean and log_std
         predictor_layers = []
         for _ in range(predictor_depth - 1):
             predictor_layers.append(nn.Linear(dim_model, dim_model))
             predictor_layers.append(nn.ReLU())
-        predictor_layers.append(nn.Linear(dim_model, 2))  # Output: mean and std
+        predictor_layers.append(nn.Linear(dim_model, 2))  # Output: mean and log_std
         self.predictor = nn.Sequential(*predictor_layers)
         
     def forward(
@@ -85,7 +85,7 @@ class TransformerNeuralProcess(nn.Module):
             
         Returns:
             mean: Predicted mean [batch_size, num_target, y_dim]
-            std: Predicted std [batch_size, num_target, y_dim]
+            log_std: Predicted log(std) [batch_size, num_target, y_dim]
         """
         batch_size = context_x.shape[0]
         num_context = context_x.shape[1]
@@ -117,14 +117,11 @@ class TransformerNeuralProcess(nn.Module):
         target_encodings = encodings[:, num_context:, :]  # [B, nt, dim_model]
         predictions = self.predictor(target_encodings)  # [B, nt, 2]
         
-        # Split into mean and std
+        # Split into mean and log_std
         mean = predictions[:, :, 0:1]  # [B, nt, 1]
-        std = predictions[:, :, 1:2]  # [B, nt, 1]
+        log_std = predictions[:, :, 1:2]  # [B, nt, 1]
         
-        # Ensure std is positive
-        std = torch.nn.functional.softplus(std) + 1e-6
-        
-        return mean, std
+        return mean, log_std
 
 
 def initialize_tnp(

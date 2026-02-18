@@ -16,6 +16,25 @@ def _to_tensor(value: object, device: str) -> torch.Tensor:
     return torch.tensor(value, dtype=torch.float32, device=device)
 
 
+def _gaussian_nll_loss(pred_mean: torch.Tensor, pred_logstd: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """
+    Compute Gaussian negative log-likelihood loss directly from log-standard deviation.
+    
+    Args:
+        pred_mean: Predicted mean [batch_size, ..., num_outputs]
+        target: Target values [batch_size, ..., num_outputs]
+        pred_logstd: Predicted log-standard deviation [batch_size, ..., num_outputs]
+    
+    Returns:
+        Loss (scalar, mean over all elements)
+    """
+    # Gaussian NLL: 0.5 * log(2*pi) + 0.5 * log_var + 0.5 * (target - mean)^2 / exp(log_var)
+    # The last term can be written as: 0.5 * (target - mean)^2 * exp(-log_var)
+    diff_squared = (target - pred_mean) ** 2
+    nll = 0.5 * ((2 * pred_logstd) + (diff_squared * torch.exp(-2 * pred_logstd)))
+    return nll.mean()
+
+
 def train_tnp(
     model: TransformerNeuralProcess,
     sample_batch: Callable[[], Tuple[object, object, object, object]],
@@ -87,7 +106,7 @@ def train_tnp(
     )
     
     # Gaussian negative log-likelihood loss
-    loss_fn = torch.nn.GaussianNLLLoss(full=False, reduction='mean')
+    loss_fn = _gaussian_nll_loss
     
     losses = []
     learning_rates = []
@@ -106,10 +125,10 @@ def train_tnp(
         target_y = _to_tensor(target_y, device)
         
         # Forward pass
-        pred_mean, pred_std = model(context_x, context_y, target_x)
+        pred_mean, pred_log_std = model(context_x, context_y, target_x)
         
         # Compute negative log-likelihood loss
-        loss = loss_fn(pred_mean, target_y, pred_std ** 2)
+        loss = loss_fn(pred_mean, pred_log_std, target_y)
         
         # Backward pass
         loss.backward()

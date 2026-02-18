@@ -249,7 +249,10 @@ function _predict(
 	with_no_grad.__enter__()
 	
 	try
-		pred_mean, pred_std = model.model(context_x_tensor, context_y_tensor, target_x_tensor)
+		torch = pyimport("torch")
+        
+        pred_mean, pred_log_std = model.model(context_x_tensor, context_y_tensor, target_x_tensor)
+		pred_std = torch.exp(pred_log_std)
 		
 		# Convert back to Julia arrays
 		# pred_mean and pred_std have shape [1, M, y_dim]
