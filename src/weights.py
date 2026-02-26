@@ -3,7 +3,9 @@ from typing import Dict, Optional
 
 import torch
 
+
 from tnp import TransformerNeuralProcess
+from structured_tnp import StructuredTNP
 
 
 def _default_device() -> str:
@@ -37,7 +39,14 @@ def save_model(model: TransformerNeuralProcess, path: str) -> None:
     torch.save(payload, path)
 
 
-def load_model(path: str, device: Optional[str] = None) -> TransformerNeuralProcess:
+def load_model(
+    path: str,
+    device: Optional[str] = None,
+    structured: bool = False
+) -> TransformerNeuralProcess:
+    """
+    Load a model from a file. If structured=True, use StructuredTNP, otherwise use TransformerNeuralProcess.
+    """
     if device is None:
         device = _default_device()
 
@@ -51,7 +60,8 @@ def load_model(path: str, device: Optional[str] = None) -> TransformerNeuralProc
     hparams = payload["hparams"]
     state_dict = payload["state_dict"]
 
-    model = TransformerNeuralProcess(**hparams)
+    model_cls = StructuredTNP if structured else TransformerNeuralProcess
+    model = model_cls(**hparams)
     model.load_state_dict(state_dict)
     model = model.to(device)
     model.eval()

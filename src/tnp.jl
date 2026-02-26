@@ -1,20 +1,27 @@
-function _setup_python_path!()
-	sys = pyimport("sys")
-	src_path = abspath(@__DIR__)
-	if pyconvert(Bool, src_path ∉ sys.path)
-		sys.path.insert(0, src_path)
-	end
-end
 
-abstract type TNPType end
-struct StandardTNP <: TNPType end
+"""
+    PredictorMode
+
+Describes how the TNP model is used for inference.
+
+Existing modes: `DefaultMode`, `KNNMode`
+"""
+abstract type PredictorMode end
+
+"""
+    DefaultMode()
+
+The default prediction mode for the TNP model.
+This mode directly uses the TNP's output predictions without any modifications.
+"""
+struct DefaultMode <: PredictorMode end
 
 """
 	TNPModel
 
 Handle for a loaded Transformer Neural Process model and its device.
 """
-struct TNPModel{T<:TNPType}
+struct TNPModel{T<:PredictorMode}
     mode::T
 	model::Py
 	device::String
@@ -37,6 +44,10 @@ Initialize a Transformer Neural Process model.
 # Arguments
 - Model architecture parameters (must match training configuration)
 - `device`: Optional device override ("mps", "cuda", or "cpu")
+- `mode`: The `PredictionMode` to use for inference.
+        Options include `DefaultMode`, `KNNMode`.
+- `base_model`: Symbol indicating which base TNP architecture to use.
+        Options include `:default`, `:structured`.
 
 # Example
 ```julia
@@ -54,12 +65,11 @@ function init_model(;
     dim_feedforward::Int = 2 * dim_model,
     dropout::Float64 = 0.0,
     device::Union{Nothing, String} = nothing,
-    mode::TNPType = StandardTNP(),
+    mode::PredictorMode = DefaultMode(),
+    base_model::Symbol = :default,
 )
 	# Import Python modules
 	torch = pyimport("torch")
-	tnp_module = pyimport("tnp")
-	initialize_tnp = tnp_module.initialize_tnp
 
 	# Determine device
 	if device === nothing
@@ -72,18 +82,37 @@ function init_model(;
 		end
 	end
 
-	py_model = initialize_tnp(
-		x_dim = x_dim,
-		y_dim = y_dim,
-		dim_model = dim_model,
-		embedder_depth = embedder_depth,
-		predictor_depth = predictor_depth,
-		num_heads = num_heads,
-		encoder_depth = encoder_depth,
-		dim_feedforward = dim_feedforward,
-		dropout = dropout,
-		device = device
-	)
+    if base_model == :default
+        tnp_module = pyimport("tnp")
+        py_model = tnp_module.initialize_tnp(
+            x_dim = x_dim,
+            y_dim = y_dim,
+            dim_model = dim_model,
+            embedder_depth = embedder_depth,
+            predictor_depth = predictor_depth,
+            num_heads = num_heads,
+            encoder_depth = encoder_depth,
+            dim_feedforward = dim_feedforward,
+            dropout = dropout,
+            device = device
+        )
+    elseif base_model == :structured
+        tnp_module = pyimport("structured_tnp")
+        py_model = tnp_module.initialize_structured_tnp(
+            x_dim = x_dim,
+            y_dim = y_dim,
+            dim_model = dim_model,
+            embedder_depth = embedder_depth,
+            predictor_depth = predictor_depth,
+            num_heads = num_heads,
+            encoder_depth = encoder_depth,
+            dim_feedforward = dim_feedforward,
+            dropout = dropout,
+            device = device
+        )
+    else
+        error("Unsupported base_model: $base_model.")
+    end
 
 	return TNPModel(mode, py_model, device)
 end
@@ -97,6 +126,10 @@ Load the trained TNP model from a file.
 # Arguments
 - `model_path::String`: Path to the saved model weights
 - `device`: Optional device override ("mps", "cuda", or "cpu")
+- `mode`: The `PredictionMode` to use for inference.
+        Options include `DefaultMode`, `KNNMode`.
+- `base_model`: Symbol indicating which base TNP architecture to use.
+        Options include `:default`, `:structured`.
 
 # Example
 ```julia
@@ -105,7 +138,8 @@ model = load_model("tnp_model.pt")
 """
 function load_model(model_path::String = "tnp_model.pt";
     device::Union{Nothing, String} = nothing,
-    mode::TNPType = StandardTNP(),
+    mode::PredictorMode = DefaultMode(),
+    base_model::Symbol = :default,
 )
 	# Import Python modules
 	torch = pyimport("torch")
@@ -122,7 +156,15 @@ function load_model(model_path::String = "tnp_model.pt";
 		end
 	end
 
-	py_model = weights.load_model(model_path, device=device)
+    if base_model == :default
+        structured = false
+    elseif base_model == :structured
+        structured = true
+    else
+        error("Unsupported base_model: $base_model.")
+    end
+
+	py_model = weights.load_model(model_path, device=device, structured=structured)
 	println("Model loaded successfully on device: $(device)")
 	return TNPModel(mode, py_model, device)
 end
@@ -193,7 +235,7 @@ end
 
 # Convert 1D vector to 2D matrix
 function _predict(
-    mode::TNPType,
+    mode::PredictorMode,
     model::TNPModel,
     context_x::AbstractMatrix{<:Real}, 
     context_y::AbstractMatrix{<:Real}, 
@@ -204,7 +246,7 @@ end
 
 # Convert 2D matrices to 3D arrays
 function _predict(
-    mode::TNPType,
+    mode::PredictorMode,
     model::TNPModel,
     context_x::AbstractMatrix{<:Real}, 
     context_y::AbstractMatrix{<:Real}, 
@@ -218,9 +260,9 @@ function _predict(
     return _predict(mode, model, context_x_3d, context_y_3d, target_x_3d)
 end
 
-# The `StandardTNP` prediction mode
+# The `DefaultMode` prediction mode
 function _predict(
-    ::StandardTNP,
+    ::DefaultMode,
     model::TNPModel,
     context_x::AbstractArray{<:Real, 3}, 
     context_y::AbstractArray{<:Real, 3}, 

@@ -3,9 +3,10 @@ module PyTNP
 using PythonCall
 
 export TNPModel
-export StandardTNP, KNNTNP
+export DefaultMode, KNNMode
 export init_model, load_model, save_model, predict, train_model!
 
+include("python.jl")
 include("tnp.jl")
 include("tnp_knn.jl")
 

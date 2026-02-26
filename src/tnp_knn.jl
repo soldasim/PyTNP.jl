@@ -1,10 +1,10 @@
 
-struct KNNTNP <: TNPType
+struct KNNMode <: PredictorMode
     k::Int
 end
 
 function _predict(
-    mode::KNNTNP,
+    mode::KNNMode,
     model::TNPModel,
     context_x::AbstractMatrix{<:Real}, 
     context_y::AbstractMatrix{<:Real}, 
@@ -20,13 +20,13 @@ function _predict(
     knn_context_x = context_x[:, knn_indices]
     knn_context_y = context_y[:, knn_indices]
     
-    # Call StandardTNP predict with the filtered context and single target point
-    mean, std = _predict(StandardTNP(), model, knn_context_x, knn_context_y, hcat(target_x))
+    # Call DefaultMode predict with the filtered context and single target point
+    mean, std = _predict(DefaultMode(), model, knn_context_x, knn_context_y, hcat(target_x))
     return mean[:,1], std[:,1]
 end
 
 function _predict(
-    mode::KNNTNP,
+    mode::KNNMode,
     model::TNPModel,
     context_x::AbstractArray{<:Real, 3}, 
     context_y::AbstractArray{<:Real, 3}, 
