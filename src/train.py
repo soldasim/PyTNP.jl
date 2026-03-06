@@ -28,10 +28,10 @@ def _gaussian_nll_loss(pred_mean: torch.Tensor, pred_logstd: torch.Tensor, targe
     Returns:
         Loss (scalar, mean over all elements)
     """
-    # Gaussian NLL: 0.5 * log(2*pi) + 0.5 * log_var + 0.5 * (target - mean)^2 / exp(log_var)
-    # The last term can be written as: 0.5 * (target - mean)^2 * exp(-log_var)
+    # Gaussian NLL: log(sigma) + 0.5 * (target - mean)^2 / sigma^2
+    # In terms of log_std: log_std + 0.5 * (target - mean)^2 * exp(-2 * log_std)
     diff_squared = (target - pred_mean) ** 2
-    nll = 0.5 * ((2 * pred_logstd) + (diff_squared * torch.exp(-2 * pred_logstd)))
+    nll = pred_logstd + 0.5 * (diff_squared * torch.exp(-2 * pred_logstd))
     return nll.mean()
 
 

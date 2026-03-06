@@ -42,10 +42,10 @@ def save_model(model: TransformerNeuralProcess, path: str) -> None:
 def load_model(
     path: str,
     device: Optional[str] = None,
-    structured: bool = False
+    base_model: str = "default"
 ) -> TransformerNeuralProcess:
     """
-    Load a model from a file. If structured=True, use StructuredTNP, otherwise use TransformerNeuralProcess.
+    Load a model from a file.
     """
     if device is None:
         device = _default_device()
@@ -60,7 +60,14 @@ def load_model(
     hparams = payload["hparams"]
     state_dict = payload["state_dict"]
 
-    model_cls = StructuredTNP if structured else TransformerNeuralProcess
+    model_cls = ""
+    if base_model == "default":
+        model_cls = TransformerNeuralProcess
+    elif base_model == "structured":
+        model_cls = StructuredTNP
+    else:
+        raise ValueError(f"Unsupported base_model: {base_model}.")
+
     model = model_cls(**hparams)
     model.load_state_dict(state_dict)
     model = model.to(device)

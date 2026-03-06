@@ -73,7 +73,8 @@ class TransformerNeuralProcess(nn.Module):
         self,
         context_x: torch.Tensor,
         context_y: torch.Tensor,
-        target_x: torch.Tensor
+        target_x: torch.Tensor,
+        return_params: bool = False
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass of the TNP.

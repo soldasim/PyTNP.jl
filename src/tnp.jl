@@ -156,15 +156,7 @@ function load_model(model_path::String = "tnp_model.pt";
 		end
 	end
 
-    if base_model == :default
-        structured = false
-    elseif base_model == :structured
-        structured = true
-    else
-        error("Unsupported base_model: $base_model.")
-    end
-
-	py_model = weights.load_model(model_path, device=device, structured=structured)
+	py_model = weights.load_model(model_path, device=device, base_model=string(base_model))
 	println("Model loaded successfully on device: $(device)")
 	return TNPModel(mode, py_model, device)
 end
@@ -229,8 +221,8 @@ target_x = rand(100, 2)  # 100 test points
 mean, std = predict(model, context_x, context_y, target_x)
 ```
 """
-function predict(model::TNPModel, context_x, context_y, target_x)
-    return _predict(model.mode, model, context_x, context_y, target_x)
+function predict(model::TNPModel, context_x, context_y, target_x; kwargs...)
+    return _predict(model.mode, model, context_x, context_y, target_x; kwargs...)
 end
 
 # Convert 1D vector to 2D matrix
@@ -239,9 +231,10 @@ function _predict(
     model::TNPModel,
     context_x::AbstractMatrix{<:Real}, 
     context_y::AbstractMatrix{<:Real}, 
-    target_x::AbstractVector{<:Real},
+    target_x::AbstractVector{<:Real};
+    kwargs...,
 )    
-    return _predict(mode, model, context_x, context_y, hcat(target_x))
+    return _predict(mode, model, context_x, context_y, hcat(target_x); kwargs...)
 end
 
 # Convert 2D matrices to 3D arrays
@@ -250,14 +243,15 @@ function _predict(
     model::TNPModel,
     context_x::AbstractMatrix{<:Real}, 
     context_y::AbstractMatrix{<:Real}, 
-    target_x::AbstractMatrix{<:Real},
+    target_x::AbstractMatrix{<:Real};
+    kwargs...,
 )
     # Reshape from (dim, N) to (dim, N, 1) for single batch
     context_x_3d = reshape(context_x, size(context_x)..., 1)
     context_y_3d = reshape(context_y, size(context_y)..., 1)
     target_x_3d = reshape(target_x, size(target_x)..., 1)
     
-    return _predict(mode, model, context_x_3d, context_y_3d, target_x_3d)
+    return _predict(mode, model, context_x_3d, context_y_3d, target_x_3d; kwargs...)
 end
 
 # The `DefaultMode` prediction mode
@@ -266,7 +260,8 @@ function _predict(
     model::TNPModel,
     context_x::AbstractArray{<:Real, 3}, 
     context_y::AbstractArray{<:Real, 3}, 
-    target_x::AbstractArray{<:Real, 3},
+    target_x::AbstractArray{<:Real, 3};
+    return_params::Bool = false,
 )
 	torch = pyimport("torch")
 	np = pyimport("numpy")
@@ -312,7 +307,11 @@ function _predict(
 			std = std_np'
 		end
 		
-		return mean, std
+        if return_params
+            return mean, std, params...
+        else
+		    return mean, std
+        end
 	finally
 		with_no_grad.__exit__(nothing, nothing, nothing)
 	end

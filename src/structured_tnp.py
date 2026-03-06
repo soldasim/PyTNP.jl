@@ -49,16 +49,21 @@ class CustomAttention(nn.Module):
         K = K.reshape(batch_size, src_len, self.num_heads, self.head_dim).transpose(1, 2)
         
         # Compute scores using scaled_dot_product_attention pattern
-        scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale  # [batch, num_heads, tgt_len, src_len]
         
         # Apply softmax1 with numerical stability: exp(x) / (1 + sum(exp(x)))
         # Subtract max for numerical stability (log-sum-exp trick)
-        scores_max = scores.amax(dim=-1, keepdim=True)
-        exp_scores = torch.exp(scores - scores_max)
-        attn_weights = exp_scores / (1.0 + exp_scores.sum(dim=-1, keepdim=True))
+        scores_max = scores.amax(dim=-1, keepdim=True)  # [batch, num_heads, tgt_len, 1]
+        exp_scores = torch.exp(scores - scores_max)  # [batch, num_heads, tgt_len, src_len]
+        exp_prior = torch.exp(0. - scores_max)  # [batch, num_heads, tgt_len, 1]
+
+        Z = exp_prior + exp_scores.sum(dim=-1, keepdim=True)  # [batch, num_heads, tgt_len, 1]
+        attn_weights = exp_scores / Z
+        a0 = exp_prior / Z
         
-        attn_weights = attn_weights.mean(dim=1)  # Average across heads: [batch, tgt_len, src_len]
-        a0 = 1 - attn_weights.sum(dim=-1)  # [batch, tgt_len]
+        # Average attention weights across heads
+        attn_weights = attn_weights.mean(dim=1)  # [batch, tgt_len, src_len]
+        a0 = a0.mean(dim=1).squeeze(-1)  # [batch, tgt_len]
         
         return a0, attn_weights
 
@@ -126,8 +131,8 @@ class StructuredTNP(nn.Module):
         )
         
         # Predictor: MLP that maps encodings to log_std
-        DIM_IN = dim_model + 1 + 1 + 1 # encoding + mean_prediction + rho + a0
-        DIM_OUT = 2 # mean_residual, log_std
+        DIM_IN = dim_model + 1 + 1 # encoding + rho + a0
+        DIM_OUT = 1 # log_std only
         assert predictor_depth >= 2
         
         predictor_layers = []
@@ -143,7 +148,8 @@ class StructuredTNP(nn.Module):
         self,
         context_x: torch.Tensor,
         context_y: torch.Tensor,
-        target_x: torch.Tensor
+        target_x: torch.Tensor,
+        return_params: bool = False
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass of the TNP with attention-weighted mean prediction.
@@ -196,26 +202,28 @@ class StructuredTNP(nn.Module):
             context_encodings, 
         )  # attn_weights: [B, nt, nc]
         # rho: sum of squares of attention weights along context dim
-        rho = (attn_weights ** 2).sum(dim=-1)  # [B, nt]
+        rho = (a0 ** 2) + (attn_weights ** 2).sum(dim=-1)  # [B, nt]
         
         # Step 5: Compute weighted average of context_y
         # attn_weights: [B, nt, nc], context_y: [B, nc, y_dim]
-        mean_base = torch.bmm(attn_weights, context_y)  # [B, nt, y_dim]
+        mean = torch.bmm(attn_weights, context_y)  # [B, nt, y_dim]
         
         # Step 6: MLP for mean residuals & log_std
-        # Prepare input for predictor: concat target_encodings, mean_base, rho, a0
+        # Prepare input for predictor: concat target_encodings, rho, a0
         predictor_input = torch.cat([
             target_encodings,   # target_encodings: [B, nt, dim_model]
-            mean_base,          # mean_base: [B, nt, y_dim]
             rho.unsqueeze(-1),  # rho: [B, nt]
             a0.unsqueeze(-1)    # a0: [B, nt]
         ], dim=-1)  # [B, nt, dim_model + y_dim + 1 + 1]
 
-        mean_residual, log_std = self.predictor(predictor_input).split(1, dim=-1)  # [B, nt, 1] each
+        # mean_residual, log_std = self.predictor(predictor_input).split(1, dim=-1)  # [B, nt, 1] each
+        log_std = self.predictor(predictor_input)  # [B, nt, 1]
         
-        # Ensure rho shape matches mean_residual for broadcasting
-        mean = mean_base + (1 - rho.unsqueeze(-1)) * mean_residual  # [B, nt, y_dim]
-        return mean, log_std
+        if return_params:
+            sum_weights = attn_weights.sum(dim=-1)  # [B, nt]
+            return mean, log_std, attn_weights, sum_weights
+        else:
+            return mean, log_std
 
 
 def initialize_structured_tnp(
